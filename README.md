@@ -9,7 +9,9 @@ Dependencies
 ------------
 
     $ sudo apt install python3-pip python3-gi gir1.2-gtk-3.0
+    $ sudo -H pip3 install -r requirements.txt
 
+(Note: Pip packages are installed globally in the above example. If you want to install in a virtualenv, you'll need to make sure that your site-packages are included in the virtualenv's path for GTK.)
 
 Before using Samsa for the first time, you will need to create a config file.
 TODO: Configuration will be done through the UI in the next release. (High priority)
