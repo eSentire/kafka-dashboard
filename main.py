@@ -12,6 +12,15 @@ from gi.repository import Gtk, Gio, GObject, Gdk
 
 KAFKA_GROUP = "kafka-dashboard-" + str(uuid.uuid4())
 
+CONFIG_FILE = os.path.expanduser("~/.samsa.ini")
+
+# Create config file if not exists
+if not os.path.exists(CONFIG_FILE):
+    t = configparser.ConfigParser()
+    t.add_section("samsa")
+    with open(CONFIG_FILE, 'w') as f:
+        t.write(f)
+
 
 class SettingsDialog(Gtk.Dialog):
     def __init__(self, parent):
@@ -71,18 +80,18 @@ class SettingsDialog(Gtk.Dialog):
         self.show_all()
 
     def load_initial_values(self):
-        DEFAULTS = configparser.SafeConfigParser({
+        stored_settings = configparser.SafeConfigParser({
             'kafka_servers': "",
             'polling_freq': "100",
             'max_history': "1000",
             'view_mode': "tabs"
         })
-        DEFAULTS.read(os.path.expanduser("~/.samsa.ini"))
+        stored_settings.read(CONFIG_FILE)
         self.initial_values = {
-            "kafka_servers": DEFAULTS.get('samsa', 'kafka_servers'),
-            "polling_freq": DEFAULTS.getint('samsa', 'polling_freq'),
-            "max_history": DEFAULTS.getint('samsa', 'max_history'),
-            "view_mode": DEFAULTS.get('samsa', 'view_mode')
+            "kafka_servers": stored_settings.get('samsa', 'kafka_servers'),
+            "polling_freq": stored_settings.getint('samsa', 'polling_freq'),
+            "max_history": stored_settings.getint('samsa', 'max_history'),
+            "view_mode": stored_settings.get('samsa', 'view_mode')
         }
 
     def get_value(self):
@@ -381,7 +390,7 @@ if __name__ == '__main__':
         for k, v in config.items():
             DEFAULTS.set('samsa', k, str(v))
         print("Writing config")
-        with open(os.path.expanduser("~/.samsa.ini"), 'w') as f:
+        with open(os.path.expanduser(CONFIG_FILE), 'w') as f:
             DEFAULTS.write(f)
         print("Written")
     else:
