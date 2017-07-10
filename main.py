@@ -163,12 +163,16 @@ class SamsaWindow(Gtk.Window):
                 self.tabs[topic].get_children()[0].set_markup("<b>{}</b>".format(topic))
         for messages in response.values():
             for message in messages:
-                self.pages[message.topic].append_message(message)
+                page = self.pages[message.topic]
+                if isinstance(page, KafkaTopicPanel):
+                    self.pages[message.topic].append_message(message)
+                else:
+                    page.get_children()[1].append_message(message)
         return True
 
 
 if __name__ == '__main__':
-    dialog = SettingsDialog(None, CONFIG_FILE)
+    dialog = SettingsDialog(Gtk.Window(), CONFIG_FILE)
     response = dialog.run()
     config = {}
     if response == Gtk.ResponseType.OK:
@@ -181,8 +185,6 @@ if __name__ == '__main__':
         with open(os.path.expanduser(CONFIG_FILE), 'w') as f:
             DEFAULTS.write(f)
         print("Written")
-    else:
-        Gtk.main_quit()
     dialog.destroy()
     if config.get('kafka_servers'):
         win = SamsaWindow(config)
