@@ -2,13 +2,13 @@
 
 import configparser
 import gi
-import json
 import kafka
 import os
-import time
 import uuid
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gio, GObject, Gdk
+from gi.repository import Gtk, Gio, GObject
+
+from components import SettingsDialog, KafkaTopicPanel
 
 KAFKA_GROUP = "kafka-dashboard-" + str(uuid.uuid4())
 
@@ -20,218 +20,6 @@ if not os.path.exists(CONFIG_FILE):
     t.add_section("samsa")
     with open(CONFIG_FILE, 'w') as f:
         t.write(f)
-
-
-class SettingsDialog(Gtk.Dialog):
-    def __init__(self, parent):
-        buttons = (Gtk.STOCK_OK, Gtk.ResponseType.OK)
-        Gtk.Dialog.__init__(self, "Settings", parent, 0, buttons)
-
-        # Load defaults from file for persistence
-        self.load_initial_values()
-
-        self.set_size_request(350, 0)
-
-        box = self.get_content_area()
-
-        row = Gtk.HBox()
-        _ = Gtk.Label("Kafka Servers")
-        row.pack_start(_, False, False, 0)
-        self.servers = Gtk.Entry()
-        self.servers.get_buffer().set_text(self.initial_values['kafka_servers'], -1)
-        row.pack_end(self.servers, False, False, 0)
-        box.pack_start(row, False, False, 0)
-
-        # TODO: Gtk.Adjustment seems to default to the min half the time
-        row = Gtk.HBox()
-        _ = Gtk.Label("Polling Frequency")
-        row.pack_start(_, False, False, 0)
-        freq_adj = Gtk.Adjustment(self.initial_values['polling_freq'], 1, 1000, 1, 10, 0)
-        self.freq = Gtk.SpinButton()
-        self.freq.set_adjustment(freq_adj)
-        row.pack_end(self.freq, False, False, 0)
-        box.pack_start(row, False, False, 0)
-
-        row = Gtk.HBox()
-        _ = Gtk.Label("Max History")
-        row.pack_start(_, False, False, 0)
-        history_adj = Gtk.Adjustment(self.initial_values['max_history'], 1, 5000, 100, 1000, 0)
-        self.history = Gtk.SpinButton()
-        self.history.set_adjustment(history_adj)
-        row.pack_end(self.history, False, False, 0)
-        box.pack_start(row, False, False, 0)
-
-        row = Gtk.HBox()
-        _ = Gtk.Label("Layout")
-        row.pack_start(_, False, False, 0)
-        layout_options = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.tab_button = Gtk.RadioButton.new_with_label_from_widget(None, "Tabs")
-        layout_options.pack_start(self.tab_button, True, True, 0)
-        self.tile_button = Gtk.RadioButton.new_with_label_from_widget(self.tab_button, "Tiles")
-        layout_options.pack_start(self.tile_button, True, True, 0)
-        row.pack_end(layout_options, False, False, 0)
-        box.pack_start(row, False, False, 0)
-
-        if self.initial_values['view_mode'] == "tabs":
-            self.tab_button.set_active(True)
-        else:
-            self.tile_button.set_active(True)
-
-        self.show_all()
-
-    def load_initial_values(self):
-        stored_settings = configparser.SafeConfigParser({
-            'kafka_servers': "",
-            'polling_freq': "100",
-            'max_history': "1000",
-            'view_mode': "tabs"
-        })
-        stored_settings.read(CONFIG_FILE)
-        self.initial_values = {
-            "kafka_servers": stored_settings.get('samsa', 'kafka_servers'),
-            "polling_freq": stored_settings.getint('samsa', 'polling_freq'),
-            "max_history": stored_settings.getint('samsa', 'max_history'),
-            "view_mode": stored_settings.get('samsa', 'view_mode')
-        }
-
-    def get_value(self):
-        return {
-            'kafka_servers': self.servers.get_buffer().get_text(),
-            'polling_freq': self.freq.get_value_as_int(),
-            'max_history': self.history.get_value_as_int(),
-            'view_mode': 'tabs' if self.tab_button.get_active() else 'tiles'
-        }
-
-
-class FilterableStringList(Gtk.TreeView):
-    def __init__(self, label="Item", filter_by=None):
-        self.model = Gtk.ListStore(str)
-        self.filter = self.model.filter_new()
-        if filter_by:
-            self.filter_by = filter_by
-            self.filter.set_visible_func(self._filter_func)
-            self.filter_by.connect('changed', self._refresh_filter)
-        Gtk.TreeView.__init__(self, self.filter)
-        column = Gtk.TreeViewColumn(label, Gtk.CellRendererText(), text=0)
-        self.append_column(column)
-
-    def add_item(self, message, limit):
-        """
-        Append message to list, limited to a specified value.
-        """
-        self.model.append([message])
-        # Clean up old messages if needed
-        if len(self.model) > limit:
-            self.model.remove(self.model.get_iter_first())
-
-    def _refresh_filter(self, *args, **kwargs):
-        self.filter.refilter()
-
-    def _filter_func(self, model, iter, data):
-        """
-        Search messages for those which contain the text in the filter widget.
-        """
-        search_text = self.filter_by.get_buffer().get_text()
-        if not search_text:
-            return True
-        return search_text in model[iter][0]
-
-
-class KafkaTopicPanel(Gtk.Grid):
-    def __init__(self, parent, topic):
-        Gtk.Grid.__init__(self)
-
-        self.parent = parent
-
-        self.topic = topic
-        self.kafka_producer = kafka.KafkaProducer(bootstrap_servers=self.parent.kafka_servers)
-
-        self.searchbar = Gtk.Entry()
-        self.searchbar.set_placeholder_text("Search")
-        self.searchbar.set_icon_from_gicon(Gtk.EntryIconPosition.PRIMARY,
-                                           Gio.ThemedIcon(name='search'))
-        self.attach(self.searchbar, 0, 0, 4, 1)
-
-        self.scrolledwindow = Gtk.ScrolledWindow()
-        self.scrolledwindow.set_hexpand(True)
-        self.scrolledwindow.set_vexpand(True)
-        self.attach(self.scrolledwindow, 0, 1, 4, 2)
-
-        self.message_list = FilterableStringList(label="Messages on {}:".format(topic),
-                                                 filter_by=self.searchbar)
-        self.scrolledwindow.add(self.message_list)
-
-        self.message_list.connect('size-allocate', self.on_treeview_changed)
-        self.message_list.connect('button-release-event', self.on_treeview_button_press)
-
-        self.send_input = Gtk.Entry()
-        self.send_button = Gtk.Button("Send")
-        self.send_input.connect('changed', self.on_input_changed)
-        self.send_button.connect('clicked', self.on_send_clicked)
-        self.attach(self.send_input, 0, 5, 3, 1)
-        self.attach(self.send_button, 3, 5, 1, 1)
-        self._lock = False
-        self.popup = Gtk.Menu()
-        self.copy_item = Gtk.MenuItem.new_with_label("Copy")
-        self.copy_item.connect('activate', self.copy_to_clipboard)
-        self.popup.add(self.copy_item)
-        self.popup.show_all()
-
-    def on_treeview_changed(self, widget, event, data=None):
-        adj = self.scrolledwindow.get_vadjustment()
-        adj.set_value(adj.get_upper() - adj.get_page_size())
-
-    def append_message(self, message):
-        """
-        Process a new message.
-        """
-        try:
-            # If the message is JSON, pretty-print it
-            m = json.dumps(json.loads(message.value.decode('utf8')), indent=4)
-        except ValueError:
-            # If it's not JSON, just add it anyway
-            m = message.value.decode('utf8')
-        self.message_list.add_item(m, self.parent.config['max_history'])
-
-    def on_send_clicked(self, *args, **kwargs):
-        """
-        Publish a message onto the queue.
-        """
-        texbuf = self.send_input.get_buffer()
-        text = texbuf.get_text()
-        resp = self.kafka_producer.send(self.topic, value=text.encode('utf8'))
-        while not resp.succeeded():
-            self.send_input.progress_pulse()
-            time.sleep(0.1)
-        self.send_input.set_progress_fraction(0)
-        texbuf.set_text("", -1)
-
-    def on_input_changed(self, widget, *args, **kwargs):
-        if self._lock is False:
-            # widget.props.text = text later will also trigger this
-            # so we use a flag to prevent running this then.
-            self._lock = True
-            text = widget.props.text
-            try:
-                text = json.dumps(json.loads(text))
-            except ValueError:
-                pass
-            widget.props.text = text
-        self._lock = False
-
-    def copy_to_clipboard(self, *args, **kwargs):
-        model, iter = self.message_list.get_selection().get_selected()
-        text = model[iter][0]
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(text, -1)
-
-    def on_treeview_button_press(self, widget, event):
-        if event.button == 3:
-            x = int(event.x)
-            y = int(event.y)
-            pthinfo = widget.get_path_at_pos(x, y)
-            if pthinfo is not None:
-                self.popup.popup(None, None, None, None, event.button, event.time)
 
 
 class PickTopicDialog(Gtk.Dialog):
@@ -380,7 +168,7 @@ class SamsaWindow(Gtk.Window):
 
 
 if __name__ == '__main__':
-    dialog = SettingsDialog(None)
+    dialog = SettingsDialog(None, CONFIG_FILE)
     response = dialog.run()
     config = {}
     if response == Gtk.ResponseType.OK:
