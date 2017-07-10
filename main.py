@@ -11,15 +11,15 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gio, GObject, Gdk
 
 KAFKA_GROUP = "kafka-dashboard-" + str(uuid.uuid4())
-DEFAULT_POLLING_FREQ = 100
-DEFAULT_MAX_HISTORY = 1000
-DEFAULT_VIEW_MODE = "tabs"
 
 
 class SettingsDialog(Gtk.Dialog):
     def __init__(self, parent):
         buttons = (Gtk.STOCK_OK, Gtk.ResponseType.OK)
         Gtk.Dialog.__init__(self, "Settings", parent, 0, buttons)
+
+        # Load defaults from file for persistence
+        self.load_initial_values()
 
         self.set_size_request(350, 0)
 
@@ -29,13 +29,15 @@ class SettingsDialog(Gtk.Dialog):
         _ = Gtk.Label("Kafka Servers")
         row.pack_start(_, False, False, 0)
         self.servers = Gtk.Entry()
+        self.servers.get_buffer().set_text(self.initial_values['kafka_servers'], -1)
         row.pack_end(self.servers, False, False, 0)
         box.pack_start(row, False, False, 0)
 
+        # TODO: Gtk.Adjustment seems to default to the min half the time
         row = Gtk.HBox()
         _ = Gtk.Label("Polling Frequency")
         row.pack_start(_, False, False, 0)
-        freq_adj = Gtk.Adjustment(DEFAULT_POLLING_FREQ, 1, 1000, 1, 10, 0)
+        freq_adj = Gtk.Adjustment(self.initial_values['polling_freq'], 1, 1000, 1, 10, 0)
         self.freq = Gtk.SpinButton()
         self.freq.set_adjustment(freq_adj)
         row.pack_end(self.freq, False, False, 0)
@@ -44,7 +46,7 @@ class SettingsDialog(Gtk.Dialog):
         row = Gtk.HBox()
         _ = Gtk.Label("Max History")
         row.pack_start(_, False, False, 0)
-        history_adj = Gtk.Adjustment(DEFAULT_MAX_HISTORY, 1, 5000, 100, 1000, 0)
+        history_adj = Gtk.Adjustment(self.initial_values['max_history'], 1, 5000, 100, 1000, 0)
         self.history = Gtk.SpinButton()
         self.history.set_adjustment(history_adj)
         row.pack_end(self.history, False, False, 0)
@@ -61,7 +63,27 @@ class SettingsDialog(Gtk.Dialog):
         row.pack_end(layout_options, False, False, 0)
         box.pack_start(row, False, False, 0)
 
+        if self.initial_values['view_mode'] == "tabs":
+            self.tab_button.set_active(True)
+        else:
+            self.tile_button.set_active(True)
+
         self.show_all()
+
+    def load_initial_values(self):
+        DEFAULTS = configparser.SafeConfigParser({
+            'kafka_servers': "",
+            'polling_freq': "100",
+            'max_history': "1000",
+            'view_mode': "tabs"
+        })
+        DEFAULTS.read(os.path.expanduser("~/.samsa.ini"))
+        self.initial_values = {
+            "kafka_servers": DEFAULTS.get('samsa', 'kafka_servers'),
+            "polling_freq": DEFAULTS.getint('samsa', 'polling_freq'),
+            "max_history": DEFAULTS.getint('samsa', 'max_history'),
+            "view_mode": DEFAULTS.get('samsa', 'view_mode')
+        }
 
     def get_value(self):
         return {
@@ -354,6 +376,16 @@ if __name__ == '__main__':
     config = {}
     if response == Gtk.ResponseType.OK:
         config = dialog.get_value()
+        DEFAULTS = configparser.ConfigParser()
+        DEFAULTS.add_section("samsa")
+        for k, v in config.items():
+            DEFAULTS.set('samsa', k, str(v))
+        print("Writing config")
+        with open(os.path.expanduser("~/.samsa.ini"), 'w') as f:
+            DEFAULTS.write(f)
+        print("Written")
+    else:
+        Gtk.main_quit()
     dialog.destroy()
     if config.get('kafka_servers'):
         win = SamsaWindow(config)
