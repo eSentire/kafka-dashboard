@@ -19,8 +19,9 @@ KAFKA_SERVERS = config['samsa']['kafka'].split(",")
 KAFKA_GROUP = "kafka-dashboard-" + str(uuid.uuid4())
 POLLING_FREQ = int(config['samsa']['polling_freq'])
 MAX_HISTORY = int(config['samsa']['history'])
-DEFAULT_TOPICS = []
+DEFAULT_TOPICS = ['events']
 VIEW_MODE = config['samsa']['view']
+VIEW_MODE = "tiles"
 
 
 class FilterableStringList(Gtk.TreeView):
@@ -221,27 +222,44 @@ class SamsaWindow(Gtk.Window):
         Create a new page.
         """
         page = KafkaTopicPanel(topic)
+        label_box = Gtk.HBox()
         label = Gtk.Label(topic)
+        close_button = Gtk.Button.new_with_label("x")
+        close_button.connect('clicked', lambda b: self.remove_page(topic))
+        label_box.pack_start(label, False, False, 0)
+        label_box.pack_end(close_button, False, False, 0)
         if VIEW_MODE == 'tabs':
-            self.topic_panel_container.append_page(page, label)
+            self.topic_panel_container.append_page(page, label_box)
             self.topic_panel_container.set_current_page(-1)
+            self.pages[topic] = page
         elif VIEW_MODE == 'tiles':
             vbox = Gtk.VBox()
-            vbox.pack_start(label, False, False, 0)
+            vbox.pack_start(label_box, False, False, 0)
             vbox.pack_start(page, True, True, 0)
             vbox.show_all()
             self.topic_panel_container.pack_start(vbox, True, True, 5)
+            self.pages[topic] = vbox
         page.show_all()
-        self.pages[topic] = page
-        self.tabs[topic] = label
+        self.tabs[topic] = label_box
+        label_box.show_all()
         self.kafka.subscribe(self.pages.keys())
+
+    def remove_page(self, topic):
+        print("Removing page for", topic)
+        self.topic_panel_container.remove(self.pages[topic])
+        del self.pages[topic]
+        if self.pages.keys():
+            self.kafka.subscribe(self.pages.keys())
+        else:
+            self.kafka.unsubscribe()
 
     def on_switch_page(self, notebook, page, page_num, *args, **kwargs):
         """
         Clear the bold markup if present when switching to a tab.
         """
-        tab = notebook.get_tab_label(page)
-        tab.set_markup(notebook.get_tab_label_text(page))
+        tab_box = notebook.get_tab_label(page)
+        label = tab_box.get_children()[0]
+        label.set_markup(label.get_text())
 
     def on_add_clicked(self, *args, **kwargs):
         """
