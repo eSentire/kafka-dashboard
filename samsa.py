@@ -19,8 +19,70 @@ KAFKA_SERVERS = config['samsa']['kafka'].split(",")
 KAFKA_GROUP = "kafka-dashboard-" + str(uuid.uuid4())
 POLLING_FREQ = int(config['samsa']['polling_freq'])
 MAX_HISTORY = int(config['samsa']['history'])
-DEFAULT_TOPICS = []
 VIEW_MODE = config['samsa']['view']
+
+
+class SettingsDialog(Gtk.Dialog):
+    def __init__(self, parent):
+        buttons = (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+                   Gtk.STOCK_OK, Gtk.ResponseType.OK)
+        Gtk.Dialog.__init__(self, "Settings", parent, 0, buttons)
+
+        self.set_size_request(350, 0)
+
+        box = self.get_content_area()
+
+        row = Gtk.HBox()
+        _ = Gtk.Label("Kafka Servers")
+        row.pack_start(_, False, False, 0)
+        self.servers = Gtk.Entry()
+        self.servers.get_buffer().set_text(", ".join(KAFKA_SERVERS), -1)
+        row.pack_end(self.servers, False, False, 0)
+        box.pack_start(row, False, False, 0)
+
+        row = Gtk.HBox()
+        _ = Gtk.Label("Polling Frequency")
+        row.pack_start(_, False, False, 0)
+        freq_adj = Gtk.Adjustment(POLLING_FREQ, 0, 1000, 1, 10, 0)
+        self.freq = Gtk.SpinButton()
+        self.freq.set_adjustment(freq_adj)
+        row.pack_end(self.freq, False, False, 0)
+        box.pack_start(row, False, False, 0)
+
+        row = Gtk.HBox()
+        _ = Gtk.Label("Max History")
+        row.pack_start(_, False, False, 0)
+        history_adj = Gtk.Adjustment(MAX_HISTORY, 0, 5000, 100, 1000, 0)
+        self.history = Gtk.SpinButton()
+        self.history.set_adjustment(history_adj)
+        row.pack_end(self.history, False, False, 0)
+        box.pack_start(row, False, False, 0)
+
+        row = Gtk.HBox()
+        _ = Gtk.Label("Layout")
+        row.pack_start(_, False, False, 0)
+        layout_options = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.tab_button = Gtk.RadioButton.new_with_label_from_widget(None, "Tabs")
+        layout_options.pack_start(self.tab_button, True, True, 0)
+        self.tile_button = Gtk.RadioButton.new_with_label_from_widget(self.tab_button, "Tiles")
+        layout_options.pack_start(self.tile_button, True, True, 0)
+        row.pack_end(layout_options, False, False, 0)
+        box.pack_start(row, False, False, 0)
+
+        if VIEW_MODE == 'tabs':
+            self.tab_button.set_active(True)
+        else:
+            self.tile_button.set_active(True)
+
+        self.show_all()
+
+    def get_value(self):
+        return {
+            'kafka': self.servers.get_buffer().get_text(),
+            'polling_freq': self.freq.get_value_as_int(),
+            'history': self.history.get_value_as_int(),
+            'view': 'tabs' if self.tab_button.get_active() else 'tiles'
+        }
 
 
 class FilterableStringList(Gtk.TreeView):
@@ -189,7 +251,7 @@ class SamsaWindow(Gtk.Window):
         self.set_titlebar(hb)
 
         newButton = Gtk.Button()
-        image = Gtk.Image.new_from_gicon(Gio.ThemedIcon(name="add"),
+        image = Gtk.Image.new_from_gicon(Gio.ThemedIcon(name="gtk-add"),
                                          Gtk.IconSize.BUTTON)
         box = Gtk.HBox()
         box.add(image)
@@ -197,6 +259,16 @@ class SamsaWindow(Gtk.Window):
         newButton.add(box)
         newButton.connect('clicked', self.on_add_clicked)
         hb.pack_end(newButton)
+
+        settingsButton = Gtk.Button()
+        image = Gtk.Image.new_from_gicon(Gio.ThemedIcon(name="gtk-preferences"),
+                                         Gtk.IconSize.BUTTON)
+        box = Gtk.HBox()
+        box.add(image)
+        box.add(Gtk.Label("Settings"))
+        settingsButton.add(box)
+        settingsButton.connect('clicked', self.on_settings_clicked)
+        hb.pack_end(settingsButton)
 
         self.set_default_size(800, 600)
         if VIEW_MODE == 'tabs':
@@ -207,11 +279,7 @@ class SamsaWindow(Gtk.Window):
             self.topic_panel_container = Gtk.HBox()
 
         self.add(self.topic_panel_container)
-        if DEFAULT_TOPICS:
-            for topic in DEFAULT_TOPICS:
-                self.add_page(topic)
-        else:
-            self.on_add_clicked()
+        self.on_settings_clicked()
 
         GObject.timeout_add(POLLING_FREQ, self.update)
         self.show_all()
@@ -253,6 +321,13 @@ class SamsaWindow(Gtk.Window):
             topic = dialog.get_value()
             if topic:
                 self.add_page(topic)
+        dialog.destroy()
+
+    def on_settings_clicked(self, *args, **kwargs):
+        dialog = SettingsDialog(self)
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            print(dialog.get_value())
         dialog.destroy()
 
     def on_destroy(self, *args, **kwargs):
