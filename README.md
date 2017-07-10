@@ -11,40 +11,27 @@ Dependencies
     $ sudo apt install python3-pip python3-gi gir1.2-gtk-3.0
     $ sudo -H pip3 install -r requirements.txt
 
-(Note: Pip packages are installed globally in the above example. If you want to install in a virtualenv, you'll need to make sure that your site-packages are included in the virtualenv's path for GTK.)
-
-Before using Samsa for the first time, you will need to create a config file.
-TODO: Configuration will be done through the UI in the next release. (High priority)
-
-On Linux, the config file location is ~/.samsa.ini
-On Windows, the config file location is (TBD).
-
-Put the following contents in .samsa.ini:
-
-    [samsa]
-    kafka=host1,host2 (comma-separated list of kafka hosts)
-    polling_freq=100 (how often in milliseconds to poll for new data)
-    history=500 (how many records per topic to keep in memory)
-    view=tiles (UI layout, 'tiles' or 'tabs')
-
-configured appropriately for your use.
+(Note: Pip packages are installed globally in the above example. If you want to install in a
+virtualenv, you'll need to make sure that your site-packages are included in the virtualenv's
+path for GTK.)
 
 
 Usage
 =====
 
-Run '$ python3 samsa.py'
+Run '$ python3 main.py'
 
-You will be prompted for a topic to subscribe to (a combo box will contain all
-topics that currently exist and also allow free text entry).
-
-If the view mode is set to 'tabs', a tab bar will appear down the left side of
-the window with a tab for each topic. If the view mode is set to 'tiles', one
-panel will appear for each topic.
+You will be prompted for the settings the app needs in order to connect.
+Specifically:
+- Kafka servers: a comma-separated list of bootstrap servers for your Kafka cluster
+- Polling frequency: how often to poll for new messages
+- Max history: the number of records to keep in memory for display/searching (per topic)
+- Layout: If the layout is set to 'tabs', a tab bar will appear down the left side of the 
+          window with a tab for each topic. If the view mode is set to 'tiles', one panel
+          will appear for each topic.
 
 New topics can be added using the "Add Topic" button in the header bar.
 
-TODO: Removing topics is planned for the next release. (Medium priority)
 
 
 Topic Panels
