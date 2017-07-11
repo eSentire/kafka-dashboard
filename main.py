@@ -40,6 +40,20 @@ class PickTopicDialog(Gtk.Dialog):
         return self.combo.get_active_text()
 
 
+class RebalanceHandler(kafka.consumer.subscription_state.ConsumerRebalanceListener):
+
+    def __init__(self, parent):
+        self.parent = parent
+
+    def on_partitions_revoked(self, revoked):
+        print("Partitions revoked")
+
+    def on_partitions_assigned(self, assigned):
+        print("Partitions assigned")
+        for topic in self.parent.paused_topics:
+            self.parent.pause(topic)
+
+
 class SamsaWindow(Gtk.Window):
     def __init__(self, config):
         Gtk.Window.__init__(self)
@@ -87,6 +101,8 @@ class SamsaWindow(Gtk.Window):
             for topic in config['topics'].split(","):
                 self.add_page(topic)
 
+        self.paused_topics = set()
+
         GObject.timeout_add(self.config['polling_freq'], self.update)
         self.show_all()
 
@@ -118,26 +134,32 @@ class SamsaWindow(Gtk.Window):
             self.pages[topic] = vbox
         page.show_all()
         self.tabs[topic] = header
-        self.kafka_consumer.subscribe(self.pages.keys())
+        self.kafka_consumer.subscribe(self.pages.keys(), listener=RebalanceHandler(self))
 
     def remove_page(self, topic):
         self.topic_panel_container.remove(self.pages[topic])
         del self.pages[topic]
         if self.pages.keys():
-            self.kafka_consumer.subscribe(self.pages.keys())
+            self.kafka_consumer.subscribe(self.pages.keys(), listener=RebalanceHandler(self))
         else:
             self.kafka_consumer.unsubscribe()
 
     def pause(self, topic):
+        print("Pausing", topic)
+        self.paused_topics.add(topic)
         partitions = self.kafka_consumer.partitions_for_topic(topic)
         assigned_partitions = self.kafka_consumer.assignment()
         to_pause = [p for p in assigned_partitions if p.topic == topic and p.partition in partitions]
+        print(to_pause)
         self.kafka_consumer.pause(*to_pause)
         self.tabs[topic].set_paused(True)
 
     def resume(self, topic):
+        print("Resuming", topic)
+        self.paused_topics.remove(topic)
         paused = self.kafka_consumer.paused()
         to_resume = [p for p in paused if p.topic == topic]
+        print(to_resume)
         self.kafka_consumer.resume(*to_resume)
         self.tabs[topic].set_paused(False)
 
