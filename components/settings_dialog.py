@@ -54,7 +54,7 @@ class SettingsDialog(Gtk.Dialog):
         row = Gtk.HBox()
         _ = Gtk.Label("Layout")
         row.pack_start(_, False, False, 0)
-        layout_options = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        layout_options = Gtk.HBox()
         self.tab_button = Gtk.RadioButton.new_with_label_from_widget(None, "Tabs")
         layout_options.pack_start(self.tab_button, True, True, 0)
         self.tile_button = Gtk.RadioButton.new_with_label_from_widget(self.tab_button, "Tiles")
