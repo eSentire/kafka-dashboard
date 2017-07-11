@@ -8,7 +8,7 @@ import uuid
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gio, GObject
 
-from components import SettingsDialog, KafkaTopicPanel
+from components import SettingsDialog, KafkaTopicPanel, KafkaPanelHeader
 
 KAFKA_GROUP = "kafka-dashboard-" + str(uuid.uuid4())
 
@@ -96,31 +96,28 @@ class SamsaWindow(Gtk.Window):
         """
         topic = topic.strip()
         page = KafkaTopicPanel(self, topic)
-        label_box = Gtk.HBox()
-        label = Gtk.Label(topic)
-        close_button = Gtk.Button.new_with_label("x")
-        close_button.connect('clicked', lambda b: self.remove_page(topic))
-        label_box.pack_start(label, False, False, 0)
-        label_box.pack_end(close_button, False, False, 0)
+
+        header = KafkaPanelHeader(topic,
+                                  close=lambda b: self.remove_page(topic),
+                                  pause=lambda b: self.pause(topic),
+                                  resume=lambda b: self.resume(topic))
 
         # TODO: This should be abstracted a little further so that
         # I'm always adding something with the same interface to self.pages
         # Currently there's some hackery in the update function
 
         if self.config['view_mode'] == 'tabs':
-            self.topic_panel_container.append_page(page, label_box)
+            self.topic_panel_container.append_page(page, header)
             self.topic_panel_container.set_current_page(-1)
             self.pages[topic] = page
         elif self.config['view_mode'] == 'tiles':
             vbox = Gtk.VBox()
-            vbox.pack_start(label_box, False, False, 0)
+            vbox.pack_start(header, False, False, 0)
             vbox.pack_start(page, True, True, 0)
-            vbox.show_all()
             self.topic_panel_container.pack_start(vbox, True, True, 5)
             self.pages[topic] = vbox
         page.show_all()
-        self.tabs[topic] = label_box
-        label_box.show_all()
+        self.tabs[topic] = header
         self.kafka_consumer.subscribe(self.pages.keys())
 
     def remove_page(self, topic):
@@ -131,12 +128,25 @@ class SamsaWindow(Gtk.Window):
         else:
             self.kafka_consumer.unsubscribe()
 
+    def pause(self, topic):
+        partitions = self.kafka_consumer.partitions_for_topic(topic)
+        assigned_partitions = self.kafka_consumer.assignment()
+        to_pause = [p for p in assigned_partitions if p.topic == topic and p.partition in partitions]
+        self.kafka_consumer.pause(*to_pause)
+        self.tabs[topic].set_paused(True)
+
+    def resume(self, topic):
+        paused = self.kafka_consumer.paused()
+        to_resume = [p for p in paused if p.topic == topic]
+        self.kafka_consumer.resume(*to_resume)
+        self.tabs[topic].set_paused(False)
+
     def on_switch_page(self, notebook, page, page_num, *args, **kwargs):
         """
         Clear the bold markup if present when switching to a tab.
         """
         tab_box = notebook.get_tab_label(page)
-        label = tab_box.get_children()[0]
+        label = tab_box.get_children()[1]
         label.set_markup(label.get_text())
 
     def on_add_clicked(self, *args, **kwargs):
@@ -169,7 +179,7 @@ class SamsaWindow(Gtk.Window):
         for topic in self.tabs.keys():
             self.set_urgency_hint(True)
             if topic in updated_topics:
-                self.tabs[topic].get_children()[0].set_markup("<b>{}</b>".format(topic))
+                self.tabs[topic].get_children()[1].set_markup("<b>{}</b>".format(topic))
         for messages in response.values():
             for message in messages:
                 page = self.pages[message.topic]
@@ -192,6 +202,8 @@ if __name__ == '__main__':
             DEFAULTS.set('samsa', k, str(v))
         with open(os.path.expanduser(CONFIG_FILE), 'w') as f:
             DEFAULTS.write(f)
+    else:
+        Gtk.main_quit()
     dialog.destroy()
     if config.get('kafka_servers'):
         win = SamsaWindow(config)
