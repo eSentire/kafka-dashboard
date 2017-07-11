@@ -73,7 +73,7 @@ class SamsaWindow(Gtk.Window):
 
         hb = Gtk.HeaderBar()
         hb.set_show_close_button(True)
-        hb.props.title = "Kafka Dashboard"
+        hb.props.title = "Kafka Dashboard: " + self.config['kafka_servers']
         self.set_titlebar(hb)
 
         newButton = Gtk.Button()
