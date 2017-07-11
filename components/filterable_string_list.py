@@ -18,6 +18,9 @@ class FilterableStringList(Gtk.TreeView):
         _.show_all()
         self.append_column(column)
 
+    def __iter__(self):
+        return iter(self.filter)
+
     def add_item(self, message, limit):
         """
         Append message to list, limited to a specified value.

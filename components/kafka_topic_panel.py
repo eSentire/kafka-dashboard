@@ -18,11 +18,18 @@ class KafkaTopicPanel(Gtk.VBox):
         self.topic = topic
         self.kafka_producer = kafka.KafkaProducer(bootstrap_servers=self.parent.kafka_servers)
 
+        self.top_bar = Gtk.HBox()
         self.searchbar = Gtk.Entry()
         self.searchbar.set_placeholder_text("Search")
         self.searchbar.set_icon_from_gicon(Gtk.EntryIconPosition.PRIMARY,
                                            Gio.ThemedIcon(name='search'))
-        self.pack_start(self.searchbar, False, False, 0)
+        self.top_bar.pack_start(self.searchbar, True, True, 0)
+
+        self.save_button = Gtk.Button("Save")
+        self.save_button.connect('clicked', self.on_save_clicked)
+        self.top_bar.pack_start(self.save_button, False, False, 0)
+
+        self.pack_start(self.top_bar, False, False, 0)
 
         self.scrolledwindow = Gtk.ScrolledWindow()
         self.scrolledwindow.set_hexpand(True)
@@ -60,6 +67,23 @@ class KafkaTopicPanel(Gtk.VBox):
         self.copy_item.connect('activate', self.copy_to_clipboard)
         self.popup.add(self.copy_item)
         self.popup.show_all()
+
+    def on_save_clicked(self, *args, **kwargs):
+        _ = Gtk.Window()
+        dialog = Gtk.FileChooserDialog("Destination", _,
+                                       Gtk.FileChooserAction.SAVE,
+                                       (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+                                        Gtk.STOCK_SAVE, Gtk.ResponseType.OK))
+        dialog.set_current_name(self.topic)
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            filename = dialog.get_filename()
+            print("Saving file", filename)
+            with open(filename, 'w') as f:
+                for row in self.message_list:
+                    f.write(json.dumps(json.loads(row[0])) + "\n")
+        _.destroy()
+        dialog.destroy()
 
     def on_treeview_changed(self, widget, event, data=None):
         adj = self.scrolledwindow.get_vadjustment()
