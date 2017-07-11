@@ -42,16 +42,15 @@ class PickTopicDialog(Gtk.Dialog):
 
 class RebalanceHandler(kafka.consumer.subscription_state.ConsumerRebalanceListener):
 
-    def __init__(self, parent):
-        self.parent = parent
+    def __init__(self, application):
+        self.application = application
 
     def on_partitions_revoked(self, revoked):
-        print("Partitions revoked")
+        pass
 
     def on_partitions_assigned(self, assigned):
-        print("Partitions assigned")
-        for topic in self.parent.paused_topics:
-            self.parent.pause(topic)
+        for topic in self.application.paused_topics:
+            self.application.pause(topic)
 
 
 class SamsaWindow(Gtk.Window):
@@ -130,6 +129,7 @@ class SamsaWindow(Gtk.Window):
             vbox = Gtk.VBox()
             vbox.pack_start(header, False, False, 0)
             vbox.pack_start(page, True, True, 0)
+            vbox.show_all()
             self.topic_panel_container.pack_start(vbox, True, True, 5)
             self.pages[topic] = vbox
         page.show_all()
@@ -145,21 +145,17 @@ class SamsaWindow(Gtk.Window):
             self.kafka_consumer.unsubscribe()
 
     def pause(self, topic):
-        print("Pausing", topic)
         self.paused_topics.add(topic)
         partitions = self.kafka_consumer.partitions_for_topic(topic)
         assigned_partitions = self.kafka_consumer.assignment()
         to_pause = [p for p in assigned_partitions if p.topic == topic and p.partition in partitions]
-        print(to_pause)
         self.kafka_consumer.pause(*to_pause)
         self.tabs[topic].set_paused(True)
 
     def resume(self, topic):
-        print("Resuming", topic)
         self.paused_topics.remove(topic)
         paused = self.kafka_consumer.paused()
         to_resume = [p for p in paused if p.topic == topic]
-        print(to_resume)
         self.kafka_consumer.resume(*to_resume)
         self.tabs[topic].set_paused(False)
 
@@ -187,7 +183,6 @@ class SamsaWindow(Gtk.Window):
         """
         Close and clean up.
         """
-        print("Closing")
         self.kafka_consumer.close()
         Gtk.main_quit()
 
@@ -213,7 +208,8 @@ class SamsaWindow(Gtk.Window):
 
 
 if __name__ == '__main__':
-    dialog = SettingsDialog(Gtk.Window(), CONFIG_FILE)
+    _ = Gtk.Window()
+    dialog = SettingsDialog(_, CONFIG_FILE)
     response = dialog.run()
     config = {}
     if response == Gtk.ResponseType.OK:
@@ -224,9 +220,8 @@ if __name__ == '__main__':
             DEFAULTS.set('samsa', k, str(v))
         with open(os.path.expanduser(CONFIG_FILE), 'w') as f:
             DEFAULTS.write(f)
-    else:
-        Gtk.main_quit()
     dialog.destroy()
+    _.destroy()
     if config.get('kafka_servers'):
         win = SamsaWindow(config)
         Gtk.main()

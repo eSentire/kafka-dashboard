@@ -1,6 +1,7 @@
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gio, Gdk
+gi.require_version('GtkSource', '3.0')
+from gi.repository import Gtk, Gio, Gdk, GtkSource
 import kafka
 import json
 import time
@@ -8,9 +9,9 @@ import time
 from components import FilterableStringList
 
 
-class KafkaTopicPanel(Gtk.Grid):
+class KafkaTopicPanel(Gtk.VBox):
     def __init__(self, parent, topic):
-        Gtk.Grid.__init__(self)
+        Gtk.VBox.__init__(self)
 
         self.parent = parent
 
@@ -21,12 +22,12 @@ class KafkaTopicPanel(Gtk.Grid):
         self.searchbar.set_placeholder_text("Search")
         self.searchbar.set_icon_from_gicon(Gtk.EntryIconPosition.PRIMARY,
                                            Gio.ThemedIcon(name='search'))
-        self.attach(self.searchbar, 0, 0, 4, 1)
+        self.pack_start(self.searchbar, False, False, 0)
 
         self.scrolledwindow = Gtk.ScrolledWindow()
         self.scrolledwindow.set_hexpand(True)
         self.scrolledwindow.set_vexpand(True)
-        self.attach(self.scrolledwindow, 0, 1, 4, 2)
+        self.pack_start(self.scrolledwindow, True, True, 5)
 
         self.message_list = FilterableStringList(label="Messages on {}:".format(topic),
                                                  filter_by=self.searchbar)
@@ -35,13 +36,25 @@ class KafkaTopicPanel(Gtk.Grid):
         self.message_list.connect('size-allocate', self.on_treeview_changed)
         self.message_list.connect('button-release-event', self.on_treeview_button_press)
 
-        self.send_input = Gtk.Entry()
+        self.send_bar = Gtk.HBox()
+        self.send_input = GtkSource.View()
+        language_manager = GtkSource.LanguageManager()
+        json_lang = language_manager.get_language("json")
+        self.send_input.get_buffer().set_language(json_lang)
+
+        self.send_input.set_auto_indent(True)
+        self.send_input.set_highlight_current_line(True)
+        self.send_input.set_indent_on_tab(True)
+
         self.send_button = Gtk.Button("Send")
-        self.send_input.connect('changed', self.on_input_changed)
         self.send_button.connect('clicked', self.on_send_clicked)
-        self.attach(self.send_input, 0, 5, 3, 1)
-        self.attach(self.send_button, 3, 5, 1, 1)
-        self._lock = False
+        self.send_bar.pack_start(self.send_input, True, True, 0)
+        self.send_bar.pack_start(self.send_button, False, False, 0)
+
+        frame = Gtk.Frame()
+        frame.add(self.send_bar)
+        self.pack_end(frame, False, False, 0)
+
         self.popup = Gtk.Menu()
         self.copy_item = Gtk.MenuItem.new_with_label("Copy")
         self.copy_item.connect('activate', self.copy_to_clipboard)
@@ -68,27 +81,23 @@ class KafkaTopicPanel(Gtk.Grid):
         """
         Publish a message onto the queue.
         """
-        texbuf = self.send_input.get_buffer()
-        text = texbuf.get_text()
-        resp = self.kafka_producer.send(self.topic, value=text.encode('utf8'))
-        while not resp.succeeded():
-            self.send_input.progress_pulse()
-            time.sleep(0.1)
-        self.send_input.set_progress_fraction(0)
-        texbuf.set_text("", -1)
 
-    def on_input_changed(self, widget, *args, **kwargs):
-        if self._lock is False:
-            # widget.props.text = text later will also trigger this
-            # so we use a flag to prevent running this then.
-            self._lock = True
-            text = widget.props.text
-            try:
-                text = json.dumps(json.loads(text))
-            except ValueError:
-                pass
-            widget.props.text = text
-        self._lock = False
+        def get_text(buffer):
+            start = buffer.get_start_iter()
+            end = buffer.get_end_iter()
+            return buffer.get_text(start, end, False)
+
+        texbuf = self.send_input.get_buffer()
+        text = get_text(texbuf)
+        try:
+            json.loads(text)
+        except:
+            return
+        else:
+            resp = self.kafka_producer.send(self.topic, value=text.encode('utf8'))
+            while not resp.succeeded():
+                time.sleep(0.1)
+            texbuf.set_text("", -1)
 
     def copy_to_clipboard(self, *args, **kwargs):
         model, iter = self.message_list.get_selection().get_selected()
