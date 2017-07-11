@@ -24,9 +24,17 @@ class SettingsDialog(Gtk.Dialog):
         row.pack_end(self.servers, False, False, 0)
         box.pack_start(row, False, False, 0)
 
+        row = Gtk.HBox()
+        _ = Gtk.Label("Initial Topics (Optional)")
+        row.pack_start(_, False, False, 0)
+        self.topics = Gtk.Entry()
+        self.topics.get_buffer().set_text(self.initial_values['topics'], -1)
+        row.pack_end(self.topics, False, False, 0)
+        box.pack_start(row, False, False, 0)
+
         # TODO: Gtk.Adjustment seems to default to the min half the time
         row = Gtk.HBox()
-        _ = Gtk.Label("Polling Frequency")
+        _ = Gtk.Label("Polling Frequency (ms)")
         row.pack_start(_, False, False, 0)
         freq_adj = Gtk.Adjustment(self.initial_values['polling_freq'], 1, 1000, 1, 10, 0)
         self.freq = Gtk.SpinButton()
@@ -64,6 +72,7 @@ class SettingsDialog(Gtk.Dialog):
     def load_initial_values(self, config_file):
         stored_settings = configparser.SafeConfigParser({
             'kafka_servers': "",
+            'topics': "",
             'polling_freq': "100",
             'max_history': "1000",
             'view_mode': "tabs"
@@ -71,6 +80,7 @@ class SettingsDialog(Gtk.Dialog):
         stored_settings.read(config_file)
         self.initial_values = {
             "kafka_servers": stored_settings.get('samsa', 'kafka_servers'),
+            "topics": stored_settings.get('samsa', 'topics'),
             "polling_freq": stored_settings.getint('samsa', 'polling_freq'),
             "max_history": stored_settings.getint('samsa', 'max_history'),
             "view_mode": stored_settings.get('samsa', 'view_mode')
@@ -79,6 +89,7 @@ class SettingsDialog(Gtk.Dialog):
     def get_value(self):
         return {
             'kafka_servers': self.servers.get_buffer().get_text(),
+            'topics': self.topics.get_buffer().get_text(),
             'polling_freq': self.freq.get_value_as_int(),
             'max_history': self.history.get_value_as_int(),
             'view_mode': 'tabs' if self.tab_button.get_active() else 'tiles'

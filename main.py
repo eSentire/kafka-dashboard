@@ -83,6 +83,10 @@ class SamsaWindow(Gtk.Window):
 
         self.add(self.topic_panel_container)
 
+        if config['topics']:
+            for topic in config['topics'].split(","):
+                self.add_page(topic)
+
         GObject.timeout_add(self.config['polling_freq'], self.update)
         self.show_all()
 
@@ -90,6 +94,7 @@ class SamsaWindow(Gtk.Window):
         """
         Create a new page.
         """
+        topic = topic.strip()
         page = KafkaTopicPanel(self, topic)
         label_box = Gtk.HBox()
         label = Gtk.Label(topic)
@@ -97,6 +102,11 @@ class SamsaWindow(Gtk.Window):
         close_button.connect('clicked', lambda b: self.remove_page(topic))
         label_box.pack_start(label, False, False, 0)
         label_box.pack_end(close_button, False, False, 0)
+
+        # TODO: This should be abstracted a little further so that
+        # I'm always adding something with the same interface to self.pages
+        # Currently there's some hackery in the update function
+
         if self.config['view_mode'] == 'tabs':
             self.topic_panel_container.append_page(page, label_box)
             self.topic_panel_container.set_current_page(-1)
@@ -114,7 +124,6 @@ class SamsaWindow(Gtk.Window):
         self.kafka_consumer.subscribe(self.pages.keys())
 
     def remove_page(self, topic):
-        print("Removing page for", topic)
         self.topic_panel_container.remove(self.pages[topic])
         del self.pages[topic]
         if self.pages.keys():
@@ -181,10 +190,8 @@ if __name__ == '__main__':
         DEFAULTS.add_section("samsa")
         for k, v in config.items():
             DEFAULTS.set('samsa', k, str(v))
-        print("Writing config")
         with open(os.path.expanduser(CONFIG_FILE), 'w') as f:
             DEFAULTS.write(f)
-        print("Written")
     dialog.destroy()
     if config.get('kafka_servers'):
         win = SamsaWindow(config)
