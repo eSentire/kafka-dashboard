@@ -9,7 +9,7 @@ Dependencies
 ------------
 
     $ sudo apt install python3-pip python3-gi gir1.2-gtk-3.0 gir1.2-gtksource-3.0
-    $ sudo -H pip3 install -r requirements.txt
+    $ pip3 install --user -r requirements.txt
 
 (Note: Pip packages are installed globally in the above example. If you want to install in a
 virtualenv, you'll need to make sure that your site-packages are included in the virtualenv's
