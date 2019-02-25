@@ -95,7 +95,7 @@ class KafkaTopicPanel(Gtk.VBox):
         """
         try:
             # If the message is JSON, pretty-print it
-            m = json.dumps(json.loads(message.value.decode('utf8')), indent=4)
+            m = json.dumps(json.loads(message.value.decode('utf8')), indent=4, sort_keys=True)
         except ValueError:
             # If it's not JSON, just add it anyway
             m = message.value.decode('utf8')
@@ -116,6 +116,7 @@ class KafkaTopicPanel(Gtk.VBox):
         try:
             json.loads(text)
         except:
+            print("Invalid JSON")
             return
         else:
             resp = self.kafka_producer.send(self.topic, value=text.encode('utf8'))
